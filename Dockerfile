@@ -1,7 +1,6 @@
 FROM lzzy12/mega-sdk-python:latest
 
 WORKDIR /usr/src/app
-RUN chmod 777 /usr/src/app
 
 RUN apt-get -qq update && \
     apt-get install -y software-properties-common && \
@@ -13,7 +12,6 @@ RUN apt-get -qq update && \
 
 COPY requirements.txt .
 COPY extract /usr/local/bin
-RUN chmod +x /usr/local/bin/extract
 RUN pip3 install --no-cache-dir -r requirements.txt
 COPY . .
 COPY netrc /root/.netrc
