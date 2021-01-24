@@ -18,17 +18,15 @@ from tenacity import *
 
 from telegram import InlineKeyboardMarkup
 from bot.helper.telegram_helper import button_build
-from telegraph import Telegraph
 
 from bot import parent_id, DOWNLOAD_DIR, IS_TEAM_DRIVE, INDEX_URL, \
-    USE_SERVICE_ACCOUNTS, download_dict, telegraph_token, BUTTON_THREE_NAME, BUTTON_THREE_URL, BUTTON_FOUR_NAME, BUTTON_FOUR_URL, BUTTON_FIVE_NAME, BUTTON_FIVE_URL, SHORTENER, SHORTENER_API
+    USE_SERVICE_ACCOUNTS, download_dict, BUTTON_THREE_NAME, BUTTON_THREE_URL, BUTTON_FOUR_NAME, BUTTON_FOUR_URL, BUTTON_FIVE_NAME, BUTTON_FIVE_URL, SHORTENER, SHORTENER_API
 from bot.helper.ext_utils.bot_utils import *
 from bot.helper.ext_utils.fs_utils import get_mime_type, get_path_size
 
 LOGGER = logging.getLogger(__name__)
 logging.getLogger('googleapiclient.discovery').setLevel(logging.ERROR)
 SERVICE_ACCOUNT_INDEX = 0
-TELEGRAPHLIMIT = 95
 
 
 class GoogleDriveHelper:
@@ -56,7 +54,6 @@ class GoogleDriveHelper:
         self.updater = None
         self.name = name
         self.update_interval = 3
-        self.telegraph_content = []
         self.path = []
 
     def cancel(self):
@@ -467,27 +464,6 @@ class GoogleDriveHelper:
                 scopes=self.__OAUTH_SCOPE)
         return build('drive', 'v3', credentials=credentials, cache_discovery=False)
 
-    def edit_telegraph(self):
-        nxt_page = 1 
-        prev_page = 0
-        for content in self.telegraph_content :
-            if nxt_page == 1 :
-                content += f'<b><a href="https://telegra.ph/{self.path[nxt_page]}">Next</a></b>'
-                nxt_page += 1
-            else :
-                if prev_page <= self.num_of_path:
-                    content += f'<b><a href="https://telegra.ph/{self.path[prev_page]}">Prev</a></b>'
-                    prev_page += 1
-                if nxt_page < self.num_of_path:
-                    content += f'<b> | <a href="https://telegra.ph/{self.path[nxt_page]}">Next</a></b>'
-                    nxt_page += 1
-            Telegraph(access_token=telegraph_token).edit_page(path = self.path[prev_page],
-                                 title = 'Mirror Bot Search',
-                                 author_name='Mirror Bot',
-                                 author_url='https://github.com/magneto261290/magneto-python-aria',
-                                 html_content=content)
-        return
-
     def escapes(self, str):
         chars = ['\\', "'", '"', r'\a', r'\b', r'\f', r'\n', r'\r', r'\t']
         for char in chars:
@@ -495,7 +471,6 @@ class GoogleDriveHelper:
         return str
 
     def drive_list(self, fileName):
-        msg = ""
         fileName = self.escapes(str(fileName))
         # Create Search Query for API request.
         query = f"'{parent_id}' in parents and (name contains '{fileName}')"
@@ -506,72 +481,34 @@ class GoogleDriveHelper:
                                                pageSize=200,
                                                fields='files(id, name, mimeType, size)',
                                                orderBy='modifiedTime desc').execute()
-
-        content_count = 0
         if response["files"]:
-            msg += f'<h4>Results : {fileName}</h4><br><br>'
-
-            for file in response.get('files', []):
-                if file.get('mimeType') == "application/vnd.google-apps.folder":  # Detect Whether Current Entity is a Folder or File.
-                    furl = f"https://drive.google.com/drive/folders/{file.get('id')}"
-                    msg += f"⁍<code>{file.get('name')}<br>(folder📁)</code><br>"
-                    if SHORTENER is not None and SHORTENER_API is not None:
-                        sfurl = requests.get('https://{}/api?api={}&url={}&format=text'.format(SHORTENER, SHORTENER_API, furl)).text
-                        msg += f"<b><a href={sfurl}>Drive Link</a></b>"
-                    else:
-                        msg += f"<b><a href={furl}>Drive Link</a></b>"
-                    if INDEX_URL is not None:
-                        url = requests.utils.requote_uri(f'{INDEX_URL}/{file.get("name")}/')
-                        if SHORTENER is not None and SHORTENER_API is not None:
-                            siurl = requests.get('https://{}/api?api={}&url={}&format=text'.format(SHORTENER, SHORTENER_API, url)).text
-                            msg += f' <b>| <a href="{siurl}">Index Link</a></b>'
-                        else:
-                            msg += f' <b>| <a href="{url}">Index Link</a></b>'
-                else:
-                    furl = f"https://drive.google.com/uc?id={file.get('id')}&export=download"
-                    msg += f"⁍<code>{file.get('name')}<br>({get_readable_file_size(int(file.get('size')))})📄</code><br>"
-                    if SHORTENER is not None and SHORTENER_API is not None:
-                        sfurl = requests.get('https://{}/api?api={}&url={}&format=text'.format(SHORTENER, SHORTENER_API, furl)).text
-                        msg += f"<b><a href={sfurl}>Drive Link</a></b>"
-                    else:
-                        msg += f"<b><a href={furl}>Drive Link</a></b>"
-                    if INDEX_URL is not None:
-                        url = requests.utils.requote_uri(f'{INDEX_URL}/{file.get("name")}')
-                        if SHORTENER is not None and SHORTENER_API is not None:
-                            siurl = requests.get('https://{}/api?api={}&url={}&format=text'.format(SHORTENER, SHORTENER_API, url)).text
-                            msg += f' <b>| <a href="{siurl}">Index Link</a></b>'
-                        else:
-                            msg += f' <b>| <a href="{url}">Index Link</a></b>'
-                msg += '<br><br>'
-                content_count += 1
-                if content_count == TELEGRAPHLIMIT :
-                    self.telegraph_content.append(msg)
-                    msg = ""
-                    content_count = 0
-
-            if msg != '':
-                self.telegraph_content.append(msg)
-
-            if len(self.telegraph_content) == 0:
-                return "No Result Found :(", None
-
-            for content in self.telegraph_content :
-                self.path.append(Telegraph(access_token=telegraph_token).create_page(
-                                                        title = 'Mirror Bot Search',
-                                                        author_name='Mirror Bot',
-                                                        author_url='https://github.com/magneto261290/magneto-python-aria',
-                                                        html_content=content
-                                                        )['path'])
-
-            self.num_of_path = len(self.path)
-            if self.num_of_path > 1:
-                self.edit_telegraph()
-
             msg = f"<b>Search Results For {fileName} 👇</b>"
-            buttons = button_build.ButtonMaker()   
-            buttons.buildbutton("HERE", f"https://telegra.ph/{self.path[0]}")
-
-            return msg, InlineKeyboardMarkup(buttons.build_menu(1))
-
-        else :
-            return '', ''
+            msg += '\n \n'
+        else:
+            return ""
+        
+        for file in response.get('files', []):
+            if INDEX_URL is not None:
+                iurl = requests.utils.requote_uri(f'{INDEX_URL}/{file.get("name")}')
+                if SHORTENER is not None and SHORTENER_API is not None:
+                    siurl = requests.get('https://{}/api?api={}&url={}&format=text'.format(SHORTENER, SHORTENER_API, iurl)).text
+                    iurl = siurl
+                msg += f'⁍ <a href="{iurl}">INDEX LINK : </a>'
+            if file.get('mimeType') == "application/vnd.google-apps.folder":  # Detect Whether Current Entity is a Folder or File.
+                if SHORTENER is not None and SHORTENER_API is not None:
+                    url = f"https://drive.google.com/drive/folders/{file.get('id')}"
+                    surl = requests.get('https://{}/api?api={}&url={}&format=text'.format(SHORTENER, SHORTENER_API, url)).text
+                    msg += f'⁍ <a href={surl}>{file.get('name')}📁</a>'
+                else:
+                    msg += f"⁍ <a href='https://drive.google.com/drive/folders/{file.get('id')}'>{file.get('name')}📁" \
+                        f"</a>"
+            else:
+                if SHORTENER is not None and SHORTENER_API is not None:
+                    url = f"https://drive.google.com/uc?id={file.get('id')}&export=download"
+                    surl = requests.get('https://{}/api?api={}&url={}&format=text'.format(SHORTENER, SHORTENER_API, url)).text
+                    msg += f"⁍ <a href={surl}</a>📄 ({get_readable_file_size(int(file.get('size')))})"
+                else:
+                    msg += f"⁍ <a href='https://drive.google.com/uc?id={file.get('id')}" \
+                       f"&export=download'>{file.get('name')}</a>📄 ({get_readable_file_size(int(file.get('size')))})"
+            msg += '\n \n'
+        return msg
